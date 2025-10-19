@@ -50,7 +50,7 @@ type PngImage struct {
 	filter byte
 	interlace byte
 	
-	imageData []byte
+	ImageData []byte
 }
 
 func CompressZlib(data []byte) []byte {
@@ -193,6 +193,10 @@ func (p* PngImage) deconstructChunk(data []byte, expectTyp *string) (int, error)
 		return 4, fmt.Errorf("failed to deconstruct chunk of type %x: %s", []byte(typ), err)
 	}
 	return parsedCount + int(PngChunk_BaseLen), nil
+}
+
+func (p* PngImage) IsFullOfData() bool {
+	return len(p.imageData) == int(p.w * p.h)
 }
 
 func (p* PngImage) deconstructChunkData(data []byte, typ string, toParse int) (int, error) {

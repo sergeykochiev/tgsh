@@ -14,6 +14,13 @@ import (
 
 const Token string = ""
 const ConfigPath string = "config.json"
+var (
+	ErrNotStickerHub = errors.New("Not a sticker hub")
+)
+
+type SHFileInfo struct {
+	
+}
 
 type TelegramFile struct {
 	FilePath string `json:"file_path"`
@@ -37,18 +44,66 @@ type TelegramSet struct {
 
 type StickerHub struct {
 	fileCount int
+	info map[string]uint16
 	telegramSet TelegramSet
 }
 
-func (sh* StickerHub) ParseInfoFile() {
-	var p PngImage
-	var fileBytes []byte
-	for {
+func hiword(n uint16) byte {
+	return byte(n >> 8)
+}
+
+func loword(n uint16) byte {
+	return byte(n & 0xFF)
+}
 	
+func (sh* StickerHub) OfNewSet(userId int, title string) error {
+	err := createNewStickerSet(TelegramCreateNewStickerSetParams{
+		UserId
+		Name
+		Title
+		Stickers
+	})
+}
+
+func (sh StickerHub) CreateEmptyInfo() string {
+	sh.info = make(map[string]uint16)
+	return ""
+}
+
+func (sh* StickerHub) ListFiles() {
+	if sh.fileCount < 0 {
+		fmt.Printf("Stickerhub \"%s\" is empty\n", sh.telegramSet.Title)
+	}
+	fmt.Printf("Files in stickerhub \"%s\" (%d total):", sh.telegramSet.Title)
+	for filename, _ := range(sh.info) {
+		fmt.Println(filename)
 	}
 }
 
-func (sh* StickerHub) FetchSet(name string) (err error) {
+func (sh* StickerHub) ParseInfoFile() error {
+	var p png.PngImage
+	var fileData []byte
+	var err error
+	var concatData []byte
+	for i := range(sh.fileCount) {
+		fileData, err = getFileData(sh.telegramSet.Stickers[i].FileId)
+		if err != nil {
+			return err
+		}
+		_, err = p.From(fileData)
+		if !p.IsFullOfData() {
+			break
+		}
+		concatData = append(concatData, fileData...)
+	}
+	err = json.Unmarshal(concatData, &sh.info)
+	if err != nil {
+		return ErrNotStickerHub
+	}
+	return nil
+}
+
+func (sh* StickerHub) OfFetchedSet(name string) (err error) {
 	sh.telegramSet, err = getStickerSet(name)
 	if err != nil {
 		return
@@ -101,8 +156,8 @@ func fetch(url string, method string, body any) (*http.Response, error) {
 	return res, nil
 }
 
-func getStickerSet(name string) (TelegramStickerSet, error) {
-	var set TelegramStickerSet
+func getStickerSet(name string) (TelegramSet, error) {
+	var set TelegramSet
 	res, err := fetch(botUrl(Token, "getStickerSet"), "GET", TelegramGetStickerSetParams{
 		Name: name,
 	})
@@ -131,6 +186,10 @@ func getFile(fileId string) (TelegramFile, error) {
 	return file, nil
 }
 
+// TODO
+func uploadFile() {
+}
+
 func createNewStickerSet(params TelegramCreateNewStickerSetParams) error {
 	_, err := fetch(botUrl(Token, "createNewStickerSet"), "POST", params)
 	if err != nil {
@@ -150,6 +209,14 @@ func downloadFile(file TelegramFile) ([]byte, error) {
 		return nil, fmt.Errorf("failed to download file: %s", err)
 	}
 	return body, nil
+}
+
+func getFileData(fileId string) ([]byte, error) {
+	file, err := getFile(fileId)
+	if err != nil {
+		return nil, err
+	}
+	return downloadFile(file)
 }
 
 func promptString(message string) (string, error) {
@@ -252,7 +319,7 @@ func generateNewSetName() string {
 	return "stickerhub_" + uuid.New().String()
 }
 
-func createHub(config Config, initFile []byte) error {
+func create(config Config, initFile []byte) error {
 	if !config.HasUser() {
 		fmt.Println("User not found in config")
 		return nil
