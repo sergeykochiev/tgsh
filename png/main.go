@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
+//"math/rand"
 	"errors"
 	"os"
 	"encoding/binary"
@@ -58,6 +58,8 @@ func CompressZlib(data []byte) []byte {
 	w := zlib.NewWriter(&b)
 	w.Write(data)
 	w.Close()
+
+	fmt.Println(b.Len())
 	
 	return b.Bytes()
 }
@@ -127,7 +129,7 @@ func (p PngImage) constructIEND() []byte {
 func (p PngImage) constructData() []byte {
 	w := p.actualWidth()
 
-	lengthData := len(p.imageData)
+	lengthData := len(p.ImageData)
 	output := make([]byte, int(p.h) * w)
 
 	var index int
@@ -136,13 +138,13 @@ func (p PngImage) constructData() []byte {
 		for j := 1; j < w; j++ {
 			index = i * w + j
 			if index - i < lengthData {
-				output[index] = p.imageData[index - i]
+				output[index] = p.ImageData[index - i]
 				continue
 			} else if index - i == lengthData {
-				output[index] = 255
+				output[index] = 255 
 				continue
 			}
-			output[index] = byte(rand.Intn(255))
+			output[index] = 0
 		}
 	}
 
@@ -196,7 +198,7 @@ func (p* PngImage) deconstructChunk(data []byte, expectTyp *string) (int, error)
 }
 
 func (p* PngImage) IsFullOfData() bool {
-	return len(p.imageData) == int(p.w * p.h)
+	return len(p.ImageData) == int(p.w * p.h)
 }
 
 func (p* PngImage) deconstructChunkData(data []byte, typ string, toParse int) (int, error) {
@@ -238,8 +240,8 @@ func (p* PngImage) deconstructIDATData(data []byte, toParse int) error {
 
 	decompressed := DecompressZlib(data)
 
-	p.imageData = nil
-	p.imageData = []byte{}
+	p.ImageData = nil
+	p.ImageData = []byte{}
 
 	var index int
 	for i := range(int(p.h)) {
@@ -249,7 +251,7 @@ func (p* PngImage) deconstructIDATData(data []byte, toParse int) error {
 			if decompressed[index] == 255 {
 				return nil
 			}
-		  p.imageData = append(p.imageData, decompressed[index])
+		  p.ImageData = append(p.ImageData, decompressed[index])
 		}
 	}
 
@@ -257,6 +259,7 @@ func (p* PngImage) deconstructIDATData(data []byte, toParse int) error {
 }
 
 func (p* PngImage) From(data []byte) (int, error) {
+	fmt.Println(string(data))
 	err := deconstructSignature(data)
 	if err != nil {
 		return 0, err
@@ -286,7 +289,7 @@ func (p* PngImage) From(data []byte) (int, error) {
 func (p* PngImage) Default(w, h uint32, imageData []byte) {
 	p.w = w
 	p.h = h
-	p.imageData = imageData
+	p.ImageData = imageData
 	p.depth = 8
 	p.colorType = PngCT_RGB_Alpha
 	p.compression = 0
@@ -327,8 +330,8 @@ func main() {
 				fmt.Println("\ton byte", parsed, ": ", data[parsed:min(len(data),parsed + 8)])
 				return
 			}
-			fmt.Println(string(p.imageData))
-			os.WriteFile(os.Args[3], p.imageData, 0644)
+			fmt.Println(string(p.ImageData))
+			os.WriteFile(os.Args[3], p.ImageData, 0644)
 		default:
 			fmt.Println("oops: unknown option")
 			return
