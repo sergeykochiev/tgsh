@@ -99,7 +99,7 @@ func main() {
 			return
 		}
 	default:
-		fmt.Println("Procceding to fetch set...")
+		fmt.Println("Proceeding to fetch set...")
 		err = sh.FromExistingSet(config.UserId, os.Args[1])
 		if err != nil {
 			fmt.Println("Failed to fetch existing set:", err)
@@ -118,6 +118,25 @@ func main() {
 			fmt.Println("Failed to upload file:", err)
 			break
 		}
+	case "get":
+		sh.ListFiles()
+		if sh.fileCount <= 0 {
+			return
+		}
+		index, err := promptInt("Index: ", 3)
+		if err != nil {
+			fmt.Println("Failed to prompt for file index:", err)
+			return
+		}
+		if index > sh.fileCount - 1 || index <= 0 {
+			fmt.Printf("Invalid index. Only indexes in range %d..%d are valid\n", 1, sh.fileCount - 1)
+			return
+		}
+		file, err := sh.GetFile(sh.telegramSet.Stickers[index].FileId)
+		if err != nil {
+			fmt.Println("Failed to get file:", err)
+			return
+		}
+		os.WriteFile("downloaded", file, 0644)
 	}
-
 }

@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+func printBytesHex(data []byte) {
+	for _, b := range(data) {
+		fmt.Printf("%02x ", b)
+	}
+	fmt.Println()
+}
+
 func getToken() string {
 	token := os.Getenv("TOKEN")
 	if token == "" {

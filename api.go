@@ -9,6 +9,13 @@ import (
 	"mime/multipart"
 )
 
+type TelegramParamsReplaceStickerInSet struct {
+	UserId int `json:"user_id"`
+	Name string `json:"name"`
+	OldFileId string `json:"old_sticker"`
+	Sticker TelegramInputSticker `json:"sticker"`
+}
+
 type TelegramParamsGetStickerSet struct {
 	Name string `json:"name"`
 }
@@ -94,6 +101,10 @@ func getFile(fileId string) (TelegramFile, error) {
 
 func getMe() (TelegramUser, error) {
 	return fetch[TelegramUser]("getMe", "GET", nil)
+}
+
+func replaceStickerInSet(params TelegramParamsReplaceStickerInSet) (bool, error) {
+	return fetch[bool]("replaceStickerInSet", "POST", params)
 }
 
 func uploadStickerFile(userId int, filename string, fileData []byte) (TelegramFile, error) {

@@ -99,10 +99,6 @@ func ConstructPngChunk(data []byte, typ string, length uint32) []byte {
 	return output
 }
 
-func (p PngImage) actualWidth() int {
-	return (int(p.w) * PngCTSizeMap[p.colorType] * int(p.depth / 8)) + 1
-}
-
 func (p PngImage) constructIHDR() []byte {
 	uint32Buf := make([]byte, 4)
 	data := make([]byte, 0, PngChunk_IHDRLen)
@@ -126,25 +122,42 @@ func (p PngImage) constructIEND() []byte {
 	return ConstructPngChunk([]byte{}, PngIEND, 0)
 }
 
+func (p PngImage) actualWidth() int {
+	return (int(p.w) * PngCTSizeMap[p.colorType] * int(p.depth / 8)) + 1
+}
+
+// currently uses hardcoded values for 8bit RGBA
 func (p PngImage) constructData() []byte {
-	w := p.actualWidth()
-
+	h := int(p.h)
+	w := int(p.w)
 	lengthData := len(p.ImageData)
-	output := make([]byte, int(p.h) * w)
+	output := make([]byte, 0, h * p.actualWidth())
 
-	var index int
-	for i := range(int(p.h)) {
-		output[i * w] = 0
-		for j := 1; j < w; j++ {
-			index = i * w + j
-			if index - i < lengthData {
-				output[index] = p.ImageData[index - i]
-				continue
-			} else if index - i == lengthData {
-				output[index] = 255 
+	idx := 0
+	for range(h) {
+		output = append(output, 0)
+		for range(w) {
+			if idx >= lengthData {
+				output = append(output, 0, 0, 0, 0)
 				continue
 			}
-			output[index] = 0
+			output = append(output, 0, 0, 0, p.ImageData[idx])
+			idx += 1
+			// output = append(output, p.ImageData[idx])
+			// idx += 1
+			// if idx >= lengthData {
+			// 	output = append(output, 0, 0, 255)
+			// 	continue
+			// }
+			// output = append(output, p.ImageData[idx])
+			// idx += 1
+			// if idx >= lengthData {
+			// 	output = append(output, 0, 255)
+			// 	continue
+			// }
+			// output = append(output, p.ImageData[idx])
+			// idx += 1
+			// output = append(output, 255)
 		}
 	}
 
@@ -259,7 +272,6 @@ func (p* PngImage) deconstructIDATData(data []byte, toParse int) error {
 }
 
 func (p* PngImage) From(data []byte) (int, error) {
-	fmt.Println(string(data))
 	err := deconstructSignature(data)
 	if err != nil {
 		return 0, err
