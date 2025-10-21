@@ -85,7 +85,7 @@ func main() {
 
 	err = sh.GetUsername()
 	if err != nil {
-		fmt.Println("Failed to get bot username")
+		fmt.Println("Failed to get bot username:", err)
 		return
 	}
 

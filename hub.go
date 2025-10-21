@@ -5,7 +5,7 @@ import (
 	"os"
 	"encoding/json"
 	"github.com/sergeykochiev/tgsh/png"
-  "golang.org/x/image/webp"
+	"github.com/sergeykochiev/tgsh/webp"
 )
 
 type StickerHub struct {
@@ -81,31 +81,24 @@ func (sh* StickerHub) ListFiles() {
 	}
 }
 
-func (sh* StickerHub) decodeFileData(fileData []byte) (png.PngImage, error) {
-	var p png.PngImage
-	_, err := p.From(fileData)
-	if err != nil {
-		return p, fmt.Errorf("decode png: %s", err)
-	}
-	return p, nil
+func (sh* StickerHub) decodeFileData(fileData []byte) ([]byte, error) {
+	return webp.Decode(fileData)
 }
 
 func (sh* StickerHub) getHeaderData() ([]byte, error) {
 	var concatData []byte
-	for i := range(sh.fileCount) {
-		fileData, err := getFileData(sh.telegramSet.Stickers[i].FileId)
-		if err != nil {
-			return nil, fmt.Errorf("get file data: %s", err)
-		}
-		p, err := sh.decodeFileData(fileData)
-		if err != nil {
-			return nil, fmt.Errorf("decode file data: %s", err)
-		}
-		if !p.IsFullOfData() {
-			break
-		}
-		concatData = append(concatData, p.ImageData...)
+	if sh.fileCount == 0 {
+		return nil, fmt.Errorf("file count is 0")
 	}
+	fileData, err := getFileData(sh.telegramSet.Stickers[0].FileId)
+	if err != nil {
+		return nil, fmt.Errorf("get file data: %s", err)
+	}
+	decoded, err := sh.decodeFileData(fileData)
+	if err != nil {
+		return nil, fmt.Errorf("decode file data: %s", err)
+	}
+	concatData = append(concatData, decoded...) 
 	return concatData, nil
 }
 
