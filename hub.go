@@ -8,12 +8,28 @@ import (
 	"github.com/sergeykochiev/tgsh/webp"
 )
 
+type StickerHubInfoEntry struct {
+	Filename string `json:"Filename"`
+}
+
+type StickerHubInfo []StickerHubInfoEntry
+
 type StickerHub struct {
 	botUsername string
 	fileCount int
 	userId int
-	info map[string]uint16
+	info StickerHubInfo
 	telegramSet TelegramSet
+}
+
+func (sh StickerHub) GetInfoEntry(idx int) StickerHubInfoEntry {
+ return sh.info[idx]
+}
+
+func (sh* StickerHub) OfUser(userId int) error {
+	// TODO add logic that check for userId validity
+	sh.userId = userId
+	return nil
 }
 
 func (sh* StickerHub) GetUsername() error {
@@ -33,19 +49,19 @@ func (sh StickerHub) GetInfoSticker() TelegramSticker {
 	return sh.telegramSet.Stickers[0]
 }
 
-func (sh* StickerHub) FromNewSet(userId int, title string) error {
+func (sh* StickerHub) FromNewSet(title string) error {
 	headerData, err := sh.createEmptyInfoFile()
 	if err != nil {
 		return fmt.Errorf("create empty info file: %s", err)
 	}
-	file, err := uploadStickerFile(userId, "header", headerData)
+	file, err := uploadStickerFile(sh.userId, "header", headerData)
 	if err != nil {
 		return fmt.Errorf("upload sticker file: %s", err)
 	}
 	name := generateNewSetName(sh.botUsername)
 	fmt.Printf("Creating set with name \"%s\"\n", name)
 	ok, err := createNewStickerSet(TelegramParamsCreateNewStickerSet{
- 		UserId: userId,
+ 		UserId: sh.userId,
  		Name: name,
  		Title: title,
  		Stickers: []TelegramInputSticker{
@@ -62,9 +78,8 @@ func (sh* StickerHub) FromNewSet(userId int, title string) error {
 	if !ok {
 		return fmt.Errorf("create new sticker set: returned false")
 	}
-	sh.userId = userId
 	fmt.Printf("Created new set. Name is \"%s\"\n", name)
-	return sh.FromExistingSet(userId, name)
+	return sh.FromExistingSet(name)
 }
 
 func (sh StickerHub) encodeDataToPng(data []byte) ([]byte, error) {
@@ -74,7 +89,7 @@ func (sh StickerHub) encodeDataToPng(data []byte) ([]byte, error) {
 	return output, nil
 }
 
-func (sh StickerHub) createInfoFile(info map[string]uint16) ([]byte, error) {
+func (sh StickerHub) createInfoFile(info StickerHubInfo) ([]byte, error) {
 	bytes, err := json.Marshal(info)
 	if err != nil {
 		return nil, fmt.Errorf("json encode Info: %s", err)
@@ -83,16 +98,17 @@ func (sh StickerHub) createInfoFile(info map[string]uint16) ([]byte, error) {
 }
 
 func (sh StickerHub) createEmptyInfoFile() ([]byte, error) {
-	return sh.createInfoFile(map[string]uint16{})
+	return sh.createInfoFile(StickerHubInfo{})
 }
 
 func (sh* StickerHub) ListFiles() {
-	if sh.fileCount <= 0 {
+	if sh.fileCount <= 1 {
 		fmt.Printf("Stickerhub \"%s\" is empty\n", sh.telegramSet.Title)
+		return
 	}
 	fmt.Printf("Files in stickerhub \"%s\" (%d total):\n", sh.telegramSet.Title, sh.fileCount - 1)
-	for filename, _ := range(sh.info) {
-		fmt.Println(filename)
+	for _, e := range(sh.info) {
+		fmt.Println(e.Filename)
 	}
 }
 
@@ -162,7 +178,7 @@ func (sh* StickerHub) UploadFile(filename string) error {
 	if err != nil {
 		return fmt.Errorf("refetch set: %s", err)
 	}
-	sh.info[filename] = 0
+	sh.info = append(sh.info, StickerHubInfoEntry{ Filename: filename })
 	encoded, err = sh.createInfoFile(sh.info)
 	if err != nil {
 		return fmt.Errorf("create info file: %s", err)
@@ -207,7 +223,7 @@ func (sh* StickerHub) parseHeader() error {
 }
 
 func (sh* StickerHub) RefetchSet() error {
-	return sh.FromExistingSet(sh.userId, sh.telegramSet.Name)
+	return sh.FromExistingSet(sh.telegramSet.Name)
 }
 
 func (sh* StickerHub) GetAndParseAll() error {
@@ -221,14 +237,14 @@ func (sh* StickerHub) GetAndParseAll() error {
 	return nil
 }
 
-func (sh* StickerHub) FromExistingSet(userId int, name string) error {
+func (sh* StickerHub) FromExistingSet(name string) error {
 	var err error
 	sh.telegramSet, err = getStickerSet(name)
 	if err != nil {
 		return fmt.Errorf("get sticker set: %s", err)
 	}
 	sh.fileCount = len(sh.telegramSet.Stickers)
-	sh.userId = userId
+	sh.userId = sh.userId
 	err = sh.parseHeader()
 	if err != nil {
 		return fmt.Errorf("parse header: %s", err)

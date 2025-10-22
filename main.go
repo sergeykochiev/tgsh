@@ -2,141 +2,127 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"errors"
 	"os"
-	"encoding/json"
 )
 
-func isConfigured() (bool, error) {
-	_, err := os.Stat(ConfigPath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, fmt.Errorf("check if file exists: %s", err)
-	}
-	return !errors.Is(err, os.ErrNotExist), nil
+func usage() {
+	fmt.Println("Usage:")
+	fmt.Println("-", "set", "<user id> <sticker set name | \"new\">", ":", "configure hub")
+	fmt.Println("-", "put", "<filename>", ":", "put file into hub")
+	fmt.Println("-", "list", ":", "list files in hub")
+	fmt.Println("-", "get", "<file index>", ":", "download file from hub by index")
 }
 
-func createConfigFile(config Config) error {
-	file, err := os.OpenFile(ConfigPath, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("open file: %s", err)
-	}
-	defer file.Close()
-	err = json.NewEncoder(file).Encode(config)
-	return err
-}
-
-func getConfigFromFile() (Config, error) {
-	var config Config
-	file, err := os.OpenFile(ConfigPath, os.O_RDONLY, 0644)
-	if err != nil {
-		return config, fmt.Errorf("open file: %s", err)
-	}
-	defer file.Close()
-	err = json.NewDecoder(file).Decode(&config)
-	if err != nil {
-		return config, fmt.Errorf("json decode Config: %s", err)
-	}
-	return config, nil
-}
-
-func configureInit() (Config, error) {
-	var config Config
+func cmdset(c *Config, sh *StickerHub, argc int, argv []string) error {
 	var err error
-	config.UserId, err = promptInt("Configure user id: ", 3)
-	if err != nil {
-		return config, err
+	if argc < 4 {
+		usage()
+		return nil
 	}
-	err = createConfigFile(config)
-	return config, err
+	c.UserId, err = strconv.Atoi(argv[2])
+	if err != nil {
+		return errors.New("Unparsable user id")
+	}
+	err = sh.OfUser(c.UserId)
+	if err != nil {
+		return errors.New("Invalid user id")
+	}
+	if argv[3] == "new" {
+		err = sh.FromNewSet(promptString("Title:"))
+	} else {
+		err = sh.FromExistingSet(argv[3])
+	}
+	if err != nil {
+	  return err
+	}
+	c.SetName = sh.telegramSet.Name
+	c.WriteFile()
+	return nil
 }
 
-func getConfig() (Config, error) {
-	isConfigured, err := isConfigured()
+func cmdput(c *Config, sh *StickerHub, argc int, argv []string) error {
+	if !c.IsConfigured() {
+		return errors.New("Use set to configure first")
+	}
+	if argc < 3 {
+		usage()
+		return nil
+	}
+	return sh.UploadFile(argv[2])
+}
+
+func cmdlist(c *Config, sh *StickerHub) error {
+	if !c.IsConfigured() {
+		return errors.New("Use set to configure first")
+	}
+	sh.ListFiles()
+	return nil
+}
+
+func cmdget(c *Config, sh *StickerHub, argc int, argv []string) error {
+	if !c.IsConfigured() {
+		return errors.New("Use set to configure first")
+	}
+	if argc < 3 {
+		usage()
+		return nil
+	}
+	index, err := strconv.Atoi(argv[2])
 	if err != nil {
-		return Config{}, err
+		return errors.New("Unparsable file index")
 	}
-	if !isConfigured {
-		return configureInit()
+	if index > sh.fileCount - 1 || index <= 0 {
+		return errors.New("Invalid index")
 	}
-	return getConfigFromFile()
+	file, err := sh.GetFile(sh.telegramSet.Stickers[index].FileId)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(sh.GetInfoEntry(index - 1).Filename, file, 0644)
+}
+
+func cmd(c *Config, sh *StickerHub, argc int, argv []string) error {
+	if argc < 2 {
+		usage()
+		return nil
+	}
+	switch os.Args[1] {
+	case "set": return cmdset(c, sh, argc, argv);
+	case "get": return cmdget(c, sh, argc, argv);
+	case "put": return cmdput(c, sh, argc, argv);
+	case "list": return cmdlist(c, sh);
+	default:
+		usage()
+		return nil
+	}
 }
 
 func main() {
-	config, err := getConfig()
+	var c Config
+	err := c.GetOrCreate()
 	if err != nil {
 		fmt.Println("Failed to get config:", err)
 		return
 	}
+
 	var sh StickerHub
-
-	argc := len(os.Args)
-	if argc < 2 {
-		fmt.Println("Provide set name (\"new\" for new one)")
-		return
-	}
-	if argc < 3 {
-		fmt.Println("Provide action (actions include \"put\" and \"get\"")
-		return
-	}
-	if os.Args[2] != "put" && os.Args[2] != "get" {
-		fmt.Println("Unknown action", os.Args[2], "(actions include \"put\" and \"get\"")
-		return
-	}
-
 	err = sh.GetUsername()
 	if err != nil {
 		fmt.Println("Failed to get bot username:", err)
 		return
 	}
 
-	switch os.Args[1] {
-	case "new":
-		fmt.Println("Proceeding to create a new set for a stickerhub...")
-		title := promptString("What should the title be? ")
-		err = sh.FromNewSet(config.UserId, title)
-		if err != nil {
-			fmt.Println("Failed to create a new set:", err)
-			return
-		}
-	default:
-		fmt.Println("Proceeding to fetch set...")
-		err = sh.FromExistingSet(config.UserId, os.Args[1])
-		if err != nil {
-			fmt.Println("Failed to fetch existing set:", err)
-			return
-		}
+	if c.IsConfigured() {
+		sh.OfUser(c.UserId)
+		sh.FromExistingSet(c.SetName)
 	}
 
-	switch os.Args[2] {
-	case "put":
-		if argc < 4 {
-			fmt.Println("Provide filename")
-			break
-		}
-		err = sh.UploadFile(os.Args[3])
-		if err != nil {
-			fmt.Println("Failed to upload file:", err)
-			break
-		}
-	case "get":
-		sh.ListFiles()
-		if sh.fileCount <= 0 {
-			return
-		}
-		index, err := promptInt("Index: ", 3)
-		if err != nil {
-			fmt.Println("Failed to prompt for file index:", err)
-			return
-		}
-		if index > sh.fileCount - 1 || index <= 0 {
-			fmt.Printf("Invalid index. Only indexes in range %d..%d are valid\n", 1, sh.fileCount - 1)
-			return
-		}
-		file, err := sh.GetFile(sh.telegramSet.Stickers[index].FileId)
-		if err != nil {
-			fmt.Println("Failed to get file:", err)
-			return
-		}
-		os.WriteFile("downloaded", file, 0644)
+	argc := len(os.Args)
+
+	err = cmd(&c, &sh, argc, os.Args)
+	if err != nil {
+		fmt.Println(err)
 	}
 }

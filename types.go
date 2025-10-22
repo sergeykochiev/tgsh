@@ -17,10 +17,6 @@ type TelegramUser struct {
 	Username string `json:"username"`
 }
 
-type Config struct {
-	UserId int
-}
-
 type TelegramSticker struct {
 	FileId string `json:"file_id"`
 }
